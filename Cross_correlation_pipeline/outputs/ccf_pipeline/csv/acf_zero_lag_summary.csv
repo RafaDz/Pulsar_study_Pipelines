@@ -1,0 +1,5 @@
+series_name,corr_method,n_points,r_zero_lag,n_pairs_zero_lag
+nudot,pearson,10826,1.0,10826
+PC1,pearson,2000,1.0,2000
+PC2,pearson,2000,1.0,2000
+PC3,pearson,2000,1.0,2000

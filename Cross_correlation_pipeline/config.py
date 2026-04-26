@@ -59,7 +59,7 @@ class FullCCFConfig:
     """
     Lagged cross-correlation settings for the entire dataset.
     """
-    pc_column: str = "PC2"                 # choose from PC1 / PC2 / PC3
+    pc_column: str = "PC1"                 # choose from PC1 / PC2 / PC3
     corr_methods: Tuple[str, ...] = ("pearson", "spearman")
     shuffle_methods: Tuple[str, ...] = ("permute", "circular")
 
@@ -85,11 +85,11 @@ class SegmentedCCFConfig:
 
     The main quantity of interest is r at zero lag.
     """
-    pc_column: str = "PC2"                 # keep PC2 here as requested
+    pc_column: str = "PC1"                 # keep PC1 here as requested
     corr_methods: Tuple[str, ...] = ("pearson", "spearman")
     shuffle_methods: Tuple[str, ...] = ("permute", "circular")
 
-    segment_days: float = 500.0
+    segment_days: float = 1000.0
     include_partial_last: bool = False
 
     max_lag_days: float = 200.0
@@ -136,11 +136,11 @@ class AnalysisConfig:
     # Choose which spin-down file to use:
     # True  -> spin_down_with_F2_and_glitches.csv
     # False -> spin_down_no_F2_and_glitches.csv
-    use_spin_down_with_f2: bool = False
+    use_spin_down_with_f2: bool = True
 
-    run_full_ccf: bool = True
-    run_segmented_ccf: bool = False
-    run_acf: bool = True
+    run_full_ccf: bool = False
+    run_segmented_ccf: bool = True
+    run_acf: bool = False
 
 
 # ============================================================

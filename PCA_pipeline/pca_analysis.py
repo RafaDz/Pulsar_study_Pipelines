@@ -224,3 +224,17 @@ def select_peak_score_index(
         raise ValueError("No observations found in requested MJD range.")
 
     return idx[np.argmax(scores[idx, pc_index])]
+
+def select_min_score_index(scores_df, pc_col, mjd_range=None):
+    df = scores_df.copy()
+
+    if mjd_range is not None:
+        lo, hi = mjd_range
+        df = df[(df["MJD"] >= lo) & (df["MJD"] <= hi)]
+
+    df = df[np.isfinite(df[pc_col])]
+
+    if df.empty:
+        raise ValueError(f"No valid {pc_col} scores found in range {mjd_range}")
+
+    return df[pc_col].idxmin()

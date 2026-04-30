@@ -64,6 +64,7 @@ def main() -> None:
         dpi=CONFIG.master_plot_1.dpi,
         phase_xlim=(CONFIG.pca.low_limit, CONFIG.pca.high_limit),
         show_score_errors=CONFIG.master_plot_1.show_score_errors,
+        nudot_err_col=CONFIG.master_plot_1.nudot_err_col,
     )
 
     print("[MAIN] Building master plot 2...")

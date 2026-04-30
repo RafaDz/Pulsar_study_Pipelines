@@ -115,7 +115,18 @@ def plot_master_plot_1(
 
     spin_mjd = spin_plot["MJD"].to_numpy(dtype=float)
     spin_nudot = spin_plot[nudot_col].to_numpy(dtype=float)
+    
+    spin_nudot_err = None
 
+    if nudot_err_col is not None:
+        if nudot_err_col not in spin_plot.columns:
+            raise ValueError(
+                f"nudot_err_col='{nudot_err_col}' was requested, "
+                f"but this column is not in spin_down_df. "
+                f"Available columns: {list(spin_plot.columns)}"
+            )
+
+        spin_nudot_err = spin_plot[nudot_err_col].to_numpy(dtype=float)
     # ------------------------------------------------------------------
     # Figure layout
     # top strip for legends / colorbar, then touching panels underneath
@@ -203,13 +214,22 @@ def plot_master_plot_1(
             pca_result.mjd_kept,
             pca_result.scores[:, 0],
             yerr=pca_result.score_err,
-            fmt="o",
+            fmt="none",
+            ecolor=(1.0, 0.0, 0.0, 0.08),   # faint red with low alpha
+            elinewidth=0.8,
+            capsize=2.5,
+            zorder=1,
+        )
+
+        # scatter points only
+        ax_score1.scatter(
+            pca_result.mjd_kept,
+            pca_result.scores[:, 0],
             color="tab:red",
-            ms=4,
-            alpha=0.15,
-            elinewidth=1.3,
-            capsize=1.0,
-            linestyle="None",
+            s=18,
+            alpha=0.55,
+            linewidths=0.0,
+            zorder=3,
         )
     else:
         ax_score1.scatter(
@@ -243,6 +263,10 @@ def plot_master_plot_1(
 
     ax_score1.axhline(0.0, color="black", lw=0.8, ls=":")
     ax_score1.set_ylabel("PC1 score", fontsize=12)
+    ax_score1.set_ylim(
+        np.min(pca_result.scores[:, 0]) - 0.1,
+        np.max(pca_result.scores[:, 0]) + 0.1,
+    )
     ax_score1.grid(alpha=0.3)
     ax_score1.tick_params(axis="x", labelbottom=False, bottom=False)
     ax_score1.text(0.02, 0.95, "c)", transform=ax_score1.transAxes,
@@ -254,13 +278,15 @@ def plot_master_plot_1(
         )
 
     ax_nudot1 = ax_score1.twinx()
-    ax_nudot1.plot(
-        spin_mjd,
-        spin_nudot,
-        color="black",
-        lw=1.7,
-        alpha=0.7,
-    )
+    if spin_nudot_err is not None:
+        ax_nudot1.fill_between(
+            spin_mjd,
+            spin_nudot - spin_nudot_err,
+            spin_nudot + spin_nudot_err,
+            color="black",
+            alpha=0.9,
+            linewidth=1.2,
+        )
     ax_nudot1.set_ylabel(r"$\dot{\nu} \ (10^{-15}) \ \text{Hz} \ s^{-1}$ ", fontsize=12)
     ax_nudot1.set_yticks([-1261.5, -1265.5, -1264.5, -1263.5, -1262.5])
 
@@ -270,17 +296,27 @@ def plot_master_plot_1(
     # Right-top panel 2: PC2 + nudot
     # -------------------------
     if show_score_errors:
+        # error bars only
         ax_score2.errorbar(
             pca_result.mjd_kept,
             pca_result.scores[:, 1],
             yerr=pca_result.score_err,
-            fmt="o",
+            fmt="none",
+            ecolor=(0.121, 0.466, 0.705, 0.08),   # faint blue with low alpha
+            elinewidth=0.8,
+            capsize=2.5,
+            zorder=1,
+        )
+
+        # scatter points only
+        ax_score2.scatter(
+            pca_result.mjd_kept,
+            pca_result.scores[:, 1],
             color="tab:blue",
-            ms=4,
-            alpha=0.15,
-            elinewidth=1.3,
-            capsize=1.0,
-            linestyle="None",
+            s=18,
+            alpha=0.55,
+            linewidths=0.0,
+            zorder=3,
         )
     else:
         ax_score2.scatter(
@@ -314,6 +350,10 @@ def plot_master_plot_1(
 
     ax_score2.axhline(0.0, color="black", lw=0.8, ls=":")
     ax_score2.set_ylabel("PC2 score", fontsize=12)
+    ax_score2.set_ylim(
+        np.min(pca_result.scores[:, 1]) - 0.1,
+        np.max(pca_result.scores[:, 1]) + 0.1,
+    )
     ax_score2.grid(alpha=0.3)
     ax_score2.tick_params(axis="x", labelbottom=False, bottom=False)
     ax_score2.text(0.02, 0.95, "d)", transform=ax_score2.transAxes,
@@ -325,13 +365,15 @@ def plot_master_plot_1(
         )
 
     ax_nudot2 = ax_score2.twinx()
-    ax_nudot2.plot(
-        spin_mjd,
-        spin_nudot,
-        color="black",
-        lw=1.7,
-        alpha=0.7,
-    )
+    if spin_nudot_err is not None:
+        ax_nudot2.fill_between(
+            spin_mjd,
+            spin_nudot - spin_nudot_err,
+            spin_nudot + spin_nudot_err,
+            color="black",
+            alpha=0.9,
+            linewidth=1.2,
+        )
     ax_nudot2.set_ylabel(r"$\dot{\nu} \ (10^{-15}) \ \text{Hz} \ s^{-1}$", fontsize=12)
     ax_nudot2.set_yticks([-1261.5, -1265.5, -1264.5, -1263.5, -1262.5])
 
@@ -446,7 +488,12 @@ def plot_master_plot_1(
     right_handles = [
         Line2D([], [], color="tab:red", marker="o", linestyle="None", markersize=6, label=pc1_label),
         Line2D([], [], color="tab:blue", marker="o", linestyle="None", markersize=6, label=pc2_label),
-        Line2D([], [], color="black", lw=1.0, label=r"$\dot{\nu}$"),
+        Line2D(
+            [], [], 
+            color="black", 
+            lw=1.0, 
+            label=r"$\dot{\nu} \pm 1\sigma$" if spin_nudot_err is not None else r"$\dot{\nu}$"
+        ),
         Line2D([], [], color="green", marker="*", linestyle="None", markersize=10, label="PC1 peak"),
         Line2D([], [], color="orange", marker="*", linestyle="None", markersize=10, label="PC2 peak"),
         Line2D([], [], color="black", lw=0.9, ls="--", label="Glitches"),
@@ -467,7 +514,7 @@ def plot_master_plot_1(
     # Horizontal colorbar in the right top strip
     cax = inset_axes(
         ax_right_top,
-        width="45%",
+        width="40%",
         height="28%",
         loc="upper right",
         borderpad=0.0,

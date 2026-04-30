@@ -34,6 +34,7 @@ def _add_panel_label(ax: plt.Axes, label: str) -> None:
 def make_master_plot(
     mjd: np.ndarray,
     score: np.ndarray,
+    dataset: np.ndarray,
     gp_result: GPResult,
     target_peak_idx: np.ndarray,
     manual_result: ManualPatternResult,
@@ -71,6 +72,7 @@ def make_master_plot(
         ax=ax_top,
         mjd=mjd,
         score=score,
+        dataset=dataset,
         gp_result=gp_result,
         target_peak_idx=target_peak_idx,
         manual_result=manual_result,
@@ -104,6 +106,7 @@ def _plot_manual_pattern_panel(
     ax: plt.Axes,
     mjd: np.ndarray,
     score: np.ndarray,
+    dataset: np.ndarray,
     gp_result: GPResult,
     target_peak_idx: np.ndarray,
     manual_result: ManualPatternResult,
@@ -114,14 +117,29 @@ def _plot_manual_pattern_panel(
     t_grid = gp_result.t_grid
     y_pred = gp_result.y_pred
 
+    dataset_upper = np.char.upper(dataset.astype(str))
+
+    afb_mask = dataset_upper == "AFB"
+    dfb_mask = dataset_upper == "DFB"
+
     ax.plot(
-        mjd,
-        score,
+        mjd[afb_mask],
+        score[afb_mask],
         "o",
         ms=6.0,
         alpha=0.15,
         color="tab:red",
-        label="PC1 scores",
+        label="AFB PC1 scores",
+    )
+
+    ax.plot(
+        mjd[dfb_mask],
+        score[dfb_mask],
+        "o",
+        ms=6.0,
+        alpha=0.15,
+        color="tab:blue",
+        label="DFB PC1 scores",
     )
 
     ax.plot(
@@ -234,7 +252,7 @@ def _plot_manual_pattern_panel(
     ax.legend(
         loc="upper center",
         bbox_to_anchor=(0.5, 1.22),
-        ncol=5,
+        ncol=3,
         frameon=False,
         fontsize=11,
     )
@@ -277,7 +295,7 @@ def _plot_full_ls_panel(
     ax.legend(
         loc="lower center",
         bbox_to_anchor=(0.5, 1.02),
-        ncol=2,
+        ncol=1,
         frameon=False,
         fontsize=11,
         borderaxespad=0.0,
@@ -293,15 +311,44 @@ def _plot_sliding_ls_panel(
     fit_df = sliding_result.fit_df.reset_index(drop=True)
     inlier_mask = sliding_result.inlier_mask
 
-    ax.plot(
-        rank1_df["window_mid_mjd"],
-        rank1_df["period_days"],
-        "-",
-        linewidth=1.2,
-        alpha=0.9,
-        color="black",
-        label="Period track",
-    )
+    if {
+        "period_err_low_days",
+        "period_err_high_days",
+    }.issubset(rank1_df.columns):
+
+        yerr = np.vstack([
+            rank1_df["period_err_low_days"].to_numpy(dtype=float),
+            rank1_df["period_err_high_days"].to_numpy(dtype=float),
+        ])
+
+        ax.errorbar(
+            rank1_df["window_mid_mjd"],
+            rank1_df["period_days"],
+            yerr=yerr,
+            fmt="-",
+            linewidth=1.2,
+            elinewidth=0.8,
+            capsize=2,
+            alpha=0.45,
+            color="black",
+            label="Period ± FWHM/2",
+        )
+
+    else:
+        print(
+            "[MASTER PLOT] No FWHM error columns found in rank1_df. "
+            f"Available columns: {list(rank1_df.columns)}"
+        )
+
+        ax.plot(
+            rank1_df["window_mid_mjd"],
+            rank1_df["period_days"],
+            "-",
+            linewidth=1.2,
+            alpha=0.9,
+            color="black",
+            label="Period track",
+        )
 
     ax.plot(
         fit_df.loc[inlier_mask, "window_mid_mjd"],
@@ -309,6 +356,7 @@ def _plot_sliding_ls_panel(
         "o",
         markersize=5,
         color="black",
+        alpha=1.0,
         label="Inliers",
     )
 
@@ -328,7 +376,7 @@ def _plot_sliding_ls_panel(
         linewidth=2.5,
         color="tab:red",
         label=(
-            f"RANSAC fit: slope={sliding_result.slope_days_per_day:.3f}"
+            f"RANSAC fit: slope={sliding_result.slope_days_per_day:.3f} days/day"
         ),
     )
 

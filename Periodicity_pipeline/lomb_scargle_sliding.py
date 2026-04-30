@@ -7,8 +7,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from astropy.timeseries import LombScargle
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, peak_widths
 from sklearn.linear_model import LinearRegression, RANSACRegressor
 
 from config import PipelineConfig
@@ -60,6 +61,49 @@ def compute_lomb_scargle(
     )
     return frequency, power
 
+def measure_peak_fwhm(
+    periods: np.ndarray,
+    power: np.ndarray,
+    peak_index: int,
+) -> dict[str, float]:
+    """
+    Measure the FWHM-like width of a Lomb-Scargle peak.
+
+    scipy.signal.peak_widths measures the width in array-index space.
+    We convert the left/right crossing positions into period-space.
+
+    Notes
+    -----
+    rel_height=0.5 gives the width at half-prominence height.
+    This is not a formal confidence interval; it is a peak-localisation width.
+    """
+    widths, width_heights, left_ips, right_ips = peak_widths(
+        power,
+        peaks=np.array([peak_index], dtype=int),
+        rel_height=0.5,
+    )
+
+    index_grid = np.arange(len(periods), dtype=float)
+
+    left_period = float(np.interp(left_ips[0], index_grid, periods))
+    right_period = float(np.interp(right_ips[0], index_grid, periods))
+
+    period_low = min(left_period, right_period)
+    period_high = max(left_period, right_period)
+
+    peak_period = float(periods[peak_index])
+    fwhm_days = period_high - period_low
+
+    return {
+        "peak_period_days": peak_period,
+        "left_period_days": period_low,
+        "right_period_days": period_high,
+        "fwhm_days": fwhm_days,
+        "period_err_low_days": peak_period - period_low,
+        "period_err_high_days": period_high - peak_period,
+        "width_height": float(width_heights[0]),
+    }
+
 
 def get_window_starts(
     t_min: float,
@@ -93,17 +137,30 @@ def get_top_n_peaks(
     peak_idx_sorted = peak_idx[order]
 
     out: list[dict[str, Any]] = []
+
     for rank, idx in enumerate(peak_idx_sorted[:n_top], start=1):
+        width_info = measure_peak_fwhm(
+            periods=periods,
+            power=power,
+            peak_index=int(idx),
+        )
+
         out.append(
             {
                 "rank": int(rank),
                 "period_days": float(periods[idx]),
                 "power": float(power[idx]),
                 "index": int(idx),
+                "left_period_days": width_info["left_period_days"],
+                "right_period_days": width_info["right_period_days"],
+                "fwhm_days": width_info["fwhm_days"],
+                "period_err_low_days": width_info["period_err_low_days"],
+                "period_err_high_days": width_info["period_err_high_days"],
+                "width_height": width_info["width_height"],
             }
         )
-    return out
 
+    return out
 
 def run_sliding_ls_for_setup(
     t: np.ndarray,
@@ -149,14 +206,28 @@ def run_sliding_ls_for_setup(
         for peak in top_peaks:
             all_peak_rows.append(
                 {
+                    # Window / segment metadata
                     "window_index": int(i),
                     "window_start_mjd": float(win_start),
                     "window_end_mjd": float(win_end),
                     "window_mid_mjd": float(win_mid),
                     "n_points": int(len(t_win)),
+
+                    # LS peak information
                     "rank": int(peak["rank"]),
                     "period_days": float(peak["period_days"]),
                     "power": float(peak["power"]),
+                    "index": int(peak["index"]),
+
+                    # FWHM information
+                    "left_period_days": float(peak["left_period_days"]),
+                    "right_period_days": float(peak["right_period_days"]),
+                    "fwhm_days": float(peak["fwhm_days"]),
+                    "period_err_low_days": float(peak["period_err_low_days"]),
+                    "period_err_high_days": float(peak["period_err_high_days"]),
+                    "width_height": float(peak["width_height"]),
+
+                    # Sliding LS setup
                     "window_days": float(window_days),
                     "step_days": float(step_days),
                     "min_points": int(min_points),
@@ -166,7 +237,28 @@ def run_sliding_ls_for_setup(
     if len(all_peak_rows) == 0:
         return pd.DataFrame()
 
-    return pd.DataFrame(all_peak_rows)
+    peaks_df = pd.DataFrame(all_peak_rows)
+
+    required_columns = [
+        "window_index",
+        "window_start_mjd",
+        "window_end_mjd",
+        "window_mid_mjd",
+        "n_points",
+        "rank",
+        "period_days",
+        "power",
+        "index",
+    ]
+
+    missing = [col for col in required_columns if col not in peaks_df.columns]
+    if missing:
+        raise RuntimeError(
+            f"Sliding LS peak table is missing required column(s): {missing}. "
+            f"Available columns: {list(peaks_df.columns)}"
+        )
+
+    return peaks_df
 
 
 def fit_ransac_rank1(
@@ -367,6 +459,139 @@ def run_sliding_lomb_scargle(
         results_df=results_df,
     )
 
+def plot_best_sliding_window_periodograms(
+    mjd: np.ndarray,
+    score: np.ndarray,
+    result: SlidingLSResult,
+    config: PipelineConfig,
+) -> None:
+    """
+    Recompute and plot the Lomb-Scargle periodogram for each valid window
+    in the winning sliding-window setup.
+
+    Each plot marks:
+    - rank-1 peak period,
+    - FWHM period interval,
+    - FWHM/half-prominence height.
+    """
+    out_dir = Path(config.output.out_dir) / "sliding_ls_window_periodograms"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    ls_cfg = config.sliding_ls
+
+    rank1_df = (
+        result.rank1_df
+        .sort_values("window_mid_mjd")
+        .reset_index(drop=True)
+    )
+
+    for row_i, row in rank1_df.iterrows():
+        win_index = int(row["window_index"])
+        win_start = float(row["window_start_mjd"])
+        win_end = float(row["window_end_mjd"])
+        win_mid = float(row["window_mid_mjd"])
+
+        t_win, y_win = extract_window(
+            t=mjd,
+            y=score,
+            start=win_start,
+            end=win_end,
+        )
+
+        if len(t_win) < result.best_min_points:
+            continue
+
+        frequency, power = compute_lomb_scargle(
+            t=t_win,
+            y=y_win,
+            min_period=ls_cfg.min_period_days,
+            max_period=ls_cfg.max_period_days,
+            samples_per_peak=ls_cfg.samples_per_peak,
+            nyquist_factor=ls_cfg.nyquist_factor,
+        )
+
+        periods = 1.0 / frequency
+
+        peak_index = int(row["index"])
+        width_info = measure_peak_fwhm(
+            periods=periods,
+            power=power,
+            peak_index=peak_index,
+        )
+
+        peak_period = width_info["peak_period_days"]
+        left_period = width_info["left_period_days"]
+        right_period = width_info["right_period_days"]
+        width_height = width_info["width_height"]
+        fwhm_days = width_info["fwhm_days"]
+
+        order = np.argsort(periods)
+        period_plot = periods[order]
+        power_plot = power[order]
+
+        fig, ax = plt.subplots(figsize=(7.0, 4.2), dpi=config.plot.dpi)
+
+        ax.plot(
+            period_plot,
+            power_plot,
+            color="black",
+            linewidth=1.2,
+            label="LS power",
+        )
+
+        ax.axvline(
+            peak_period,
+            color="tab:red",
+            linestyle="--",
+            linewidth=1.3,
+            label=f"Rank-1 peak = {peak_period:.1f} d",
+        )
+
+        ax.axvspan(
+            left_period,
+            right_period,
+            color="tab:red",
+            alpha=0.15,
+            label=f"FWHM = {fwhm_days:.1f} d",
+        )
+
+        ax.hlines(
+            width_height,
+            left_period,
+            right_period,
+            color="tab:red",
+            linewidth=2.0,
+        )
+
+        ax.plot(
+            [left_period, right_period],
+            [width_height, width_height],
+            "o",
+            color="tab:red",
+            markersize=4,
+        )
+
+        ax.set_xlabel("Period (days)")
+        ax.set_ylabel("Lomb-Scargle power")
+        ax.set_title(
+            f"Window {win_index}: "
+            f"{win_start:.1f}–{win_end:.1f} MJD, "
+            f"mid={win_mid:.1f}"
+        )
+        ax.grid(alpha=0.3)
+        ax.legend(frameon=False, fontsize=9)
+
+        out_path = out_dir / (
+            f"window_{win_index:03d}_"
+            f"mid_{win_mid:.1f}_"
+            f"peak_{peak_period:.1f}d.png"
+        )
+
+        fig.tight_layout()
+        fig.savefig(out_path, bbox_inches="tight")
+        plt.close(fig)
+
+    print(f"[SLIDING LS] Window periodogram diagnostics saved to: {out_dir}")
 
 def save_sliding_ls_outputs(
     result: SlidingLSResult,

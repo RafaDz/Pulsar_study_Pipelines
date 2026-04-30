@@ -40,11 +40,12 @@ def load_scores(
 
     mjd = df["MJD"].to_numpy(dtype=float)
     score = df[pc_column].to_numpy(dtype=float)
+    dataset = df["dataset"].astype(str).to_numpy()
 
     if len(mjd) == 0:
         raise ValueError(f"No valid rows found in {input_csv} after cleaning.")
 
-    if len(mjd) != len(score):
-        raise ValueError("Length mismatch between MJD and score arrays.")
+    if len(mjd) != len(score) or len(mjd) != len(dataset):
+        raise ValueError("Length mismatch between MJD, score, and dataset arrays.")
 
-    return mjd, score
+    return mjd, score, dataset

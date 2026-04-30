@@ -9,7 +9,11 @@ from config import CONFIG, PipelineConfig
 from gp_model import fit_gp, detect_positive_peaks, select_target_peaks
 from io_validate import load_scores
 from lomb_scargle_full import compute_full_lomb_scargle, save_full_ls_outputs
-from lomb_scargle_sliding import run_sliding_lomb_scargle, save_sliding_ls_outputs
+from lomb_scargle_sliding import (
+    run_sliding_lomb_scargle,
+    save_sliding_ls_outputs,
+    plot_best_sliding_window_periodograms,
+)
 from manual_pattern import run_manual_pattern_search, save_manual_pattern_outputs
 from master_plot import make_master_plot
 
@@ -38,7 +42,7 @@ def run_pipeline(config: PipelineConfig = CONFIG) -> PipelineResult:
     """
     ensure_dirs(config)
 
-    mjd, score = load_scores(
+    mjd, score, dataset = load_scores(
         input_csv=config.input.input_csv,
         pc_column=config.input.pc_column,
     )
@@ -99,9 +103,17 @@ def run_pipeline(config: PipelineConfig = CONFIG) -> PipelineResult:
         config=config,
     )
 
+    plot_best_sliding_window_periodograms(
+        mjd=mjd,
+        score=score,
+        result=sliding_result,
+        config=config,
+    )
+
     master_plot_path = make_master_plot(
         mjd=mjd,
         score=score,
+        dataset=dataset,
         gp_result=gp_result,
         target_peak_idx=target_peak_idx,
         manual_result=manual_result,

@@ -45,12 +45,13 @@ class PathsConfig:
 
 @dataclass
 class MasterPlot1Config:
-    #pc1_region: tuple[float, float] = (53400, 53600)        # AFB PC1 peak region
-    #pc2_region: tuple[float, float] = (50700, 50900)        # AFB PC2 peak region
-    pc1_region: tuple[float, float] = (59400, 59680)       # DFB PC1 peak region
-    pc2_region: tuple[float, float] = (55700, 56000)       # DFB PC2 peak region
+    pc1_region: tuple[float, float] = (53400, 53600)        # AFB PC1 peak region
+    pc2_region: tuple[float, float] = (50700, 50900)        # AFB PC2 peak region
+    #pc1_region: tuple[float, float] = (59400, 59680)       # DFB PC1 peak region
+    #pc2_region: tuple[float, float] = (55700, 56000)       # DFB PC2 peak region
     outpath: Path | None = None
-    show_score_errors: bool = False
+    show_score_errors: bool = True
+    nudot_err_col: str | None = "nudot_err"
     dpi: int = 500
 
 @dataclass
@@ -67,7 +68,7 @@ class PipelineConfig:
     statistics_pca: StatisticsPCAConfig = field(default_factory=StatisticsPCAConfig)
     master_plot_1: MasterPlot1Config = field(default_factory=MasterPlot1Config)
     master_plot_2: MasterPlot2Config = field(default_factory=MasterPlot2Config)
-    active_dataset: str = "DFB"
+    active_dataset: str = "AFB"
 
 CONFIG = PipelineConfig()
 

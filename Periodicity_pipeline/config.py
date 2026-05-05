@@ -90,17 +90,17 @@ class SlidingLSConfig:
     fit_ref_mjd: float | None = None
 
     min_points_grid: tuple[int, ...] = field(
-        default_factory=lambda: tuple(int(x) for x in np.arange(350, 550, 50))
+        default_factory=lambda: tuple(int(x) for x in np.arange(250, 501, 50))
     )
     window_grid_days: tuple[float, ...] = field(
-        default_factory=lambda: tuple(np.arange(6000.0, 7500.0, 500.0))
+        default_factory=lambda: (2900.0,)
     )
     step_grid_days: tuple[float, ...] = field(
-        default_factory=lambda: tuple(np.arange(400.0, 900.0, 100.0))
+        default_factory=lambda: (2900.0,)
     )
 
     ransac_min_samples: float = 0.5
-    ransac_residual_threshold: float = 35.0
+    ransac_residual_threshold: float = 100.0
     ransac_max_trials: int = 1000
     ransac_random_state: int = 42
 
